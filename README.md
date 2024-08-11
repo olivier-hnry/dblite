@@ -1,6 +1,6 @@
 # DreamBerd Lite
 
-A lightweight interpreter for the perfect programming language, DreamBerd, written in OCaml.
+A lightweight interpreter for [DreamBerd, a perfect programming language](https://github.com/TodePond/DreamBerd), written in OCaml.
 
 Because of numerous reasons, including keeping this interpreter light and fast, not all features from [the original DreamBerd](https://github.com/TodePond/DreamBerd) are implemented. Therefore this interpreter is rebranded _DreamBerd Lite_. See the [wiki](https://github.com/olivier-hnry/dblite/wiki) for more about supported syntaxes.
 
