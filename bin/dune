@@ -1,4 +1,4 @@
 (executable
- (public_name db-lite)
+ (public_name dblite)
  (name main)
  (libraries libdb))
