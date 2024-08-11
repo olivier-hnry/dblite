@@ -18,5 +18,5 @@
 (package
  (name dblite)
  (synopsis "Light interpreter for DreamBerd")
- (description "A lightweight interpreter for the perfect programming language, DreamBerd, written in OCaml")
+ (description "A lightweight interpreter for DreamBerd, a perfect programming language, written in OCaml")
  (depends ocaml dune))
