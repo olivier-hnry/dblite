@@ -10,4 +10,4 @@ To install DreamBerd Lite, you need a working installation of `ocaml`. Use `dune
 
 ## Usage
 
-Interpret a program by running `db-lite path/to/program.db` in the conole. To display help, you may use the option `-help` or `--help`.
+Interpret a program by running `dblite path/to/program.db` in the conole. To display help, you may use the option `-help` or `--help`.
