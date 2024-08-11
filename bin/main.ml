@@ -7,7 +7,7 @@ let anon_fun s = match !file_name with
   | "" -> file_name := s
   | _ -> failwith "Too many arguments : all files must be in the same file."
 
-let usage_msg = "db-lite <file>"
+let usage_msg = "dblite <file>"
 
 let () = Arg.parse [] anon_fun usage_msg; if !file_name = "" then failwith "A file name must be provided."
 
