@@ -1,6 +1,6 @@
 (lang dune 3.10)
 
-(name db-lite)
+(name dblite)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://github.com/olivier-hnry/dblite/wiki)
 
 (package
- (name db-lite)
+ (name dblite)
  (synopsis "Light interpreter for DreamBerd")
  (description "A lightweight interpreter for the perfect programming language, DreamBerd, written in OCaml")
  (depends ocaml dune))
