@@ -142,10 +142,11 @@ let split_on_precedence prog = let rec aux li = match li with
     end
   in aux precedence
 
-let rec num_of_var var_li var_name = match var_li with
-  | [] -> None
-  | a :: t when a=var_name -> Some (List.length t)
-  | _ :: t -> num_of_var t var_name
+let num_of_var var_li var_name = List.find_index (function s -> s = var_name) var_li
+
+let num_of_var_orfail var_li var_name = match num_of_var var_li var_name with
+  | None -> failwith ("Unknown variable "^var_name^".")
+  | Some i -> i
 
 let rec is_only_brackets block = match block with
   | [] -> None
@@ -185,40 +186,40 @@ let rec count_previous block var_li = match block with
     end
   | _ -> failwith "Expected variable after previous."
 
-let rec read_block var_li fun_li block = let r = read_block var_li fun_li 
-  in match block with
-  | [] -> failwith "Expected expression."
-  | [Word "true"] -> Val (Bool_c true)
-  | [Word "false"] -> Val (Bool_c false)
-  | [Word w] -> begin match num_of_var var_li w with
-      | Some i -> Var(i, 0)
-      | _ -> begin match int_of_string_opt w with
-          | Some n -> Val (Int_c n)
-          | _ -> begin match float_of_string_opt w with
-              | Some x -> Val (Float_c x)
-              | _ -> failwith ("Unknown variable "^w^" : can't access this variable.")
-            end
-        end
-    end
-  | [Litteral_string s] -> Val (String_c s)
-  | [Enclosed('(', x)] -> r x
-  | [Enclosed('[', elements)] -> let li = List.map r (split_comma elements) in Array_b(Array.of_list li)
-  | [Word fun_name; Enclosed('(', args)] -> begin match num_of_var fun_li fun_name with
-      | Some i -> Funcall_b(i, List.map r (split_comma args))
-      | _ -> failwith ("Unknown function "^fun_name^".")
-    end
-  | Word "current" :: t when is_only_current t -> Var(var_id_current t var_li, 0)
-  | Word "previous" :: t when is_only_previous t -> let id, prev = count_previous t var_li in Var(id, prev)
-  | x :: t when is_only_brackets t = None -> let rec aux li = match li with
-      | [] -> r [x]
-      | Enclosed('[', index) :: t -> Elem(aux t, r index)
-      | _ -> failwith "Faulty implementation : expected bracket enclosed elements."
-    in aux (List.rev t)
-  | [Symbol ';'; x] -> Not(r [x])
-  | _ -> let a, w, b = split_on_precedence block in let a = match a, w with
-      | [], Symbol '-' | [], Big_operator '-' -> [Word "0"]
-      | _ -> a
-    in (constructor_of_binary_operator w) (r a) (r b)
+let read_block var_li fun_li block = let rec r block = match block with
+    | [] -> failwith "Expected expression."
+    | [Word "true"] -> Val (Bool_c true)
+    | [Word "false"] -> Val (Bool_c false)
+    | [Word w] -> begin match num_of_var var_li w with
+        | Some i -> Var(i, 0)
+        | _ -> begin match int_of_string_opt w with
+            | Some n -> Val (Int_c n)
+            | _ -> begin match float_of_string_opt w with
+                | Some x -> Val (Float_c x)
+                | _ -> failwith ("Unknown variable "^w^" : can't access this variable.")
+              end
+          end
+      end
+    | [Litteral_string s] -> Val (String_c s)
+    | [Enclosed('(', x)] -> r x
+    | [Enclosed('[', elements)] -> let li = List.map r (split_comma elements) in Array_b(Array.of_list li)
+    | [Word fun_name; Enclosed('(', args)] -> begin match num_of_var fun_li fun_name with
+        | Some i -> Funcall_b(i, List.map r (split_comma args))
+        | _ -> failwith ("Unknown function "^fun_name^".")
+      end
+    | Word "current" :: t when is_only_current t -> Var(var_id_current t var_li, 0)
+    | Word "previous" :: t when is_only_previous t -> let id, prev = count_previous t var_li in Var(id, prev)
+    | x :: t when is_only_brackets t = None -> let rec aux li = match li with
+        | [] -> r [x]
+        | Enclosed('[', index) :: t -> Elem(aux t, r index)
+        | _ -> failwith "Faulty implementation : expected bracket enclosed elements."
+      in aux (List.rev t)
+    | [Symbol ';'; x] -> Not(r [x])
+    | _ -> let a, w, b = split_on_precedence block in let a = match a, w with
+        | [], Symbol '-' | [], Big_operator '-' -> [Word "0"]
+        | _ -> a
+      in (constructor_of_binary_operator w) (r a) (r b)
+  in r block
 
 let data_of_declare var_name var_li = match num_of_var var_li var_name with
   | None -> List.length var_li, var_name :: var_li
@@ -243,43 +244,52 @@ let reassignator var_name coord_li assign_symbol value var_li fun_li = let r = r
     | _ -> failwith "Faulty implementation : expected assignement symbol."
   in Reassign(id, aux coord_li, result)
 
+let find_vars prog = let rec merge l1 l2 = match l1 with
+    | [] -> l2
+    | x :: t when List.mem x l2 -> merge t l2
+    | x :: t -> merge t (x :: l2)
+  in let rec aux prog = match prog with
+    | [] -> []
+    | Line_s (_, Word w1 :: Word w2 :: Word var_name :: _) :: t when List.mem w1 ["const"; "var"] && List.mem w2 ["const"; "var"]
+      -> let vars = aux t
+        in if List.mem var_name vars then vars else var_name :: vars
+    | If_s ((_, prog) :: t_if) :: t -> merge (aux prog) (aux ((If_s t_if ) :: t))
+    | _ :: t -> aux t
+  in aux prog
+
 let rec read_line var_li fun_li line = let r = read_block var_li fun_li 
   in match line with
   | Line_s (_, []) -> failwith "Expected non-empty line."
-  | Line_s (n, Word "const" :: Word "const" :: Word var_name :: Symbol '=' :: t) -> let i, newvarli = data_of_declare var_name var_li in Declare(false, false, i, n, r t), newvarli
-  | Line_s (n, Word "const" :: Word "var" :: Word var_name :: Symbol '=' :: t) -> let i, newvarli = data_of_declare var_name var_li in Declare(false, true, i, n, r t), newvarli
-  | Line_s (n, Word "var" :: Word "const" :: Word var_name :: Symbol '=' :: t) -> let i, newvarli = data_of_declare var_name var_li in Declare(true, false, i, n, r t), newvarli
-  | Line_s (n, Word "var" :: Word "var" :: Word var_name :: Symbol '=' :: t) -> let i, newvarli = data_of_declare var_name var_li in Declare(true, true, i, n, r t), newvarli
+  | Line_s (n, Word "const" :: Word "const" :: Word var_name :: Symbol '=' :: t) -> let i = num_of_var_orfail var_li var_name in Declare(false, false, i, n, r t)
+  | Line_s (n, Word "const" :: Word "var" :: Word var_name :: Symbol '=' :: t) -> let i = num_of_var_orfail var_li var_name in Declare(false, true, i, n, r t)
+  | Line_s (n, Word "var" :: Word "const" :: Word var_name :: Symbol '=' :: t) -> let i = num_of_var_orfail var_li var_name in Declare(true, false, i, n, r t)
+  | Line_s (n, Word "var" :: Word "var" :: Word var_name :: Symbol '=' :: t) -> let i = num_of_var_orfail var_li var_name in Declare(true, true, i, n, r t)
   | Line_s (_, Word var_name :: Symbol '=' :: t) -> begin match num_of_var var_li var_name with
-      | Some i -> Reassign(i, [], r t), var_li
+      | Some i -> Reassign(i, [], r t)
       | _ -> failwith ("Unknown variable "^var_name^" : can't reassign this variable.")
     end
   | Line_s (_, Word var_name :: t) when is_assignement (is_only_brackets t) -> let coord_li, w, value = find_coord t
-    in reassignator var_name coord_li w value var_li fun_li, var_li
-  | If_s li -> let lif, newv = read_prog_li var_li fun_li li in If lif, newv
-  | Line_s (_, [Word "reverse"]) -> Reverse, var_li
-  | Line_s (_, Word "return" :: t) -> Return(r t, content_buf), var_li
+    in reassignator var_name coord_li w value var_li fun_li
+  | If_s li -> let lif = read_prog_li var_li fun_li li in If lif
+  | Line_s (_, [Word "reverse"]) -> Reverse
+  | Line_s (_, Word "return" :: t) -> Return(r t, content_buf)
   | Line_s (_, [Word fun_name; Enclosed('(', args)]) -> begin match num_of_var fun_li fun_name with
-      | Some i -> Funcall_l(i, List.map r (split_comma args)), var_li
+      | Some i -> Funcall_l(i, List.map r (split_comma args))
       | _ -> failwith ("Unknown function "^fun_name^".")
     end
   | _ -> failwith "Syntax error."
   
-  and read_prog var_li fun_li prog = let rec aux var_li fun_li prog = match prog with
-      | [] -> [], var_li
-      | x :: t -> let s, newv = read_line var_li fun_li x
-        in let seq, finalv = aux newv fun_li t
-        in s :: seq, finalv
-    in let final, finalv = aux var_li fun_li prog
-    in Array.of_list final, finalv
+  and read_prog var_li fun_li prog = let rec aux prog = match prog with
+      | [] -> []
+      | x :: t -> read_line var_li fun_li x :: aux t
+    in Array.of_list (aux prog)
 
   and read_prog_li var_li fun_li prog_li = match prog_li with
-    | [] -> [], var_li
-    | (cdt, x) :: t -> let y, newv = read_prog var_li fun_li x
-      in let seq, finalv = read_prog_li newv fun_li t
-      in ((read_block var_li fun_li cdt), y) :: seq, finalv
+    | [] -> []
+    | (cdt, x) :: t -> (read_block var_li fun_li cdt, read_prog var_li fun_li x) :: read_prog_li var_li fun_li t
 
-let read_fun (_, arg_li, def) fun_li = let prog, var_li = read_prog (List.rev arg_li) fun_li def
+let read_fun (_, arg_li, def) fun_li = let var_li = arg_li @ find_vars def
+  in let prog = read_prog var_li fun_li def
   in Custom(List.length arg_li, List.length var_li, prog)
 
 let init n_var functions = {
@@ -302,6 +312,7 @@ let setup prog_string = let prog_main_first, fun_def_li = split_statement (read 
   in let rec get_definitions li = match li with
     | [] -> builtin_functions
     | x :: t -> read_fun x fun_li :: get_definitions t
-  in let prog_main, var_li = read_prog [] fun_li prog_main_first
-  in let context = init (List.length var_li) (List.rev (get_definitions fun_def_li))
+  in let var_li = find_vars prog_main_first
+  in let prog_main = read_prog var_li fun_li prog_main_first
+  in let context = init (List.length var_li) (get_definitions fun_def_li)
   in prog_main, context
