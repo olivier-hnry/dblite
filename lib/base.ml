@@ -224,5 +224,5 @@ let rec exec_p prog pos context = if pos >= 0 && pos < Array.length prog && not 
           content_buf := None;
           exec_p def 0 context_f;
           match !content_buf with
-            | None -> failwith "This function has no return value."
+            | None -> Unit_c
             | Some c -> c
